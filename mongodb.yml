@@ -52,22 +52,91 @@ Parameters:
         Type: List<AWS::EC2::Subnet::Id>
 
     SecurityGroups:
-        Description: 'Security Group to place around the ECS instances'
+        Description: 'Security Group to place around the instances'
         Type: List<AWS::EC2::SecurityGroup::Id>
 
 Mappings:
     # these AMIs change regularly.  Check http://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-optimized_AMI.html
     RegionToAmazonAMI:
         us-east-1:
-            HVM64: ami-b2df2ca4
+            HVM64: not-set
         us-east-2:
-            HVM64: ami-832b0ee6
+            HVM64: not-set
         us-west-1:
-            HVM64: ami-dd104dbd
+            HVM64: not-set
         us-west-2:
-            HVM64: ami-022b9262
+            HVM64: ami-a6bb34c6
 
 Resources:
+
+    #SSH and MongoDB ports only
+    MongoDBSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: 'MongoDB Traffic'
+            VpcId:
+                Ref: 'VPC'
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 22
+                  ToPort: 22
+                  CidrIp: 0.0.0.0/0
+            Tags:
+                - Key: 'Name'
+                  Value:
+                      'Fn::Join': [ ':', [ 'MongoDB', !Ref 'AWS::StackName' ] ]
+                - Key: 'Project'
+                  Value:
+                      Ref: 'Project'
+                - Key: 'Purpose'
+                  Value: 'MongoDB traffic only'
+                - Key: 'Creator'
+                  Value:
+                      Ref: 'Creator'
+                - Key: 'Environment'
+                  Value:
+                      Ref: 'Environment'
+                - Key: 'Freetext'
+                  Value: 'No notes'
+
+    AlphaInstance:
+        Type: "AWS::EC2::Instance"
+            Properties:
+                AvailabilityZone: String
+                BlockDeviceMappings:
+                    - EC2 Block Device Mapping
+                EbsOptimized: Boolean
+                ImageId: String
+                InstanceInitiatedShutdownBehavior: 'stop'
+                InstanceType: String
+                KeyName: String
+                Monitoring: false
+                SecurityGroupIds:
+                    - String
+                SourceDestCheck: true
+                SubnetId: String
+                Tags:
+                    - Key: 'Name'
+                      Value:
+                          'Fn::Join': [ ':', [ 'MongoDB Alpha', !Ref 'AWS::StackName' ] ]
+                    - Key: 'Project'
+                      Value:
+                          Ref: 'Project'
+                    - Key: 'Purpose'
+                          Value: 'MongoDB Replica Set'
+                    - Key: 'Creator'
+                      Value:
+                          Ref: 'Creator'
+                    - Key: 'Environment'
+                      Value:
+                          Ref: 'Environment'
+                    - Key: 'Freetext'
+                      Value: 'Master Node'
+                Tenancy: 'default'
+                UserData: String
+                Volumes:
+                    - EC2 MountPoint
+
     # Role needed by the EC2 instances so they can interact with ECS services
     AmazonEC2ContainerServiceForEC2Role:
         Type: 'AWS::IAM::Role'

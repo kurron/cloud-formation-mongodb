@@ -1,8 +1,7 @@
 # Overview
 This project is a [CloudFormation](https://aws.amazon.com/cloudformation/) template
-that inserts a new [ECS](https://aws.amazon.com/ecs/) cluster into an existing
-VPC.  Four EC2 instances are added to the cluster.  Two instances in each availability
-zone.  The instances are auto-scaled and use spot pricing.
+that inserts a new [MongoDB](https://www.mongodb.com/) replica set into an existing
+VPC.  Three instances will be created, one in each availability zone.
 
 ## Assets Produced
 1. ECS Cluster
@@ -11,7 +10,7 @@ zone.  The instances are auto-scaled and use spot pricing.
 ## Tagging Strategy
 The following tags are applied to assets that allow tagging:
 * Project - useful for generating cost reports, defaults to `Weapon-X`
-* Purpose - what role the asset plays in the VPC, eg `ECS Agent`
+* Purpose - what role the asset plays in the VPC, eg `MongoDB cluster`
 * Creator - the entity creating the assets, defaults to `CloudFormation`
 * Environment - the context the assets are a part of, defaults to `development`
 * Freetext - place holder for asset-specific notes, meant to be adjusted in the console if needed
@@ -29,12 +28,12 @@ There is nothing to install.
 
 # Tips and Tricks
 
-## Creating an ECS Cluster
+## Creating A Stack
 There is a convenience Bash script that can be run to create a new cluster.  If
 you just want to test things out run `scripts/create-stack.sh`.  In several
 moments, your cluster should be created.  Check your AWS console for confirmation.
 
-If you want to specify certain aspects of the VPC, try running something like this:
+If you want to specify certain aspects of the stack, try running something like this:
 `scripts/create-stack.sh production-cluster Phoenix production you@somewhere.com`.
 This form provides the following:
 * stack name of `production-cluster`
@@ -43,7 +42,7 @@ This form provides the following:
 * creator of `you@somewhere.com`
 
 
-## Destroying an ECS Cluster
+## Destroying The Stack
 There is a convenience script for destroying clusters.  Run
 `scripts/destroy-stack.sh production-cluster` to destroy the cluster we created above.
 
