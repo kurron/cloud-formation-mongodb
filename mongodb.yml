@@ -2,7 +2,7 @@
 # Cannot get this to work for some reason
 #AWSTemplateFormatVersion: AWSTemplateFormatVersion: '2010-09-09'
 
-Description: This template creates a new EC2 Container Service (ECS) into an existing VPC.
+Description: This template installs a MongoDB cluster into an existing VPC.
 
 Metadata:
     Foo:
@@ -68,7 +68,6 @@ Mappings:
             HVM64: ami-a6bb34c6
 
 Resources:
-
     #SSH and MongoDB ports only
     MongoDBSecurityGroup:
         Type: AWS::EC2::SecurityGroup
@@ -106,6 +105,13 @@ Resources:
     AlphaInstance:
         Type: "AWS::EC2::Instance"
         Properties:
+            BlockDeviceMappings:
+                - DeviceName: /dev/xvdf
+                  Ebs:
+                      DeleteOnTermination: true
+                      VolumeSize:
+                          Ref: VolumeSize
+                      VolumeType: 'gp2'
             EbsOptimized: false
             ImageId:
                 Fn::FindInMap:
@@ -141,43 +147,6 @@ Resources:
                 - Key: 'Freetext'
                   Value: 'Master Node'
             Tenancy: 'default'
-
-    AlphaDataVolume:
-        Type: "AWS::EC2::Volume"
-        Properties:
-            AutoEnableIO: false
-            AvailabilityZone:
-                "Fn::GetAtt": [ 'AlphaInstance', 'AvailabilityZone' ]
-            Encrypted: false
-            Size:
-                Ref: VolumeSize
-            Tags:
-                - Key: 'Name'
-                  Value:
-                      'Fn::Join': [ ':', [ 'MongoDB Alpha Data Volume', !Ref 'AWS::StackName' ] ]
-                - Key: 'Project'
-                  Value:
-                      Ref: 'Project'
-                - Key: 'Purpose'
-                  Value: 'MongoDB Data'
-                - Key: 'Creator'
-                  Value:
-                      Ref: 'Creator'
-                - Key: 'Environment'
-                  Value:
-                      Ref: 'Environment'
-                - Key: 'Freetext'
-                  Value: 'No notes'
-            VolumeType: gp2
-
-    AlphaDataVolumeAttachment:
-        Type: "AWS::EC2::VolumeAttachment"
-        Properties:
-            Device: /dev/xvdf
-            InstanceId:
-                Ref: AlphaInstance
-            VolumeId:
-                Ref: AlphaDataVolume
 
 Outputs:
     AlphaPrivateAddress:
