@@ -32,6 +32,10 @@ Parameters:
         Type: 'String'
         Default: 'No notes'
 
+    VPC:
+        Description: 'VCP to install the instances into'
+        Type: 'AWS::EC2::VPC::Id'
+
     SshKeyName:
         Description: 'Name of the key to use when creating the EC2 instances'
         Type: 'AWS::EC2::KeyPair::KeyName'
@@ -40,20 +44,16 @@ Parameters:
     InstanceType:
         Description: 'How large of a box to run your containers on'
         Type: 'String'
-        Default: 'm4.large'
+        Default: 't2.small'
 
-    SpotPrice:
-        Description: 'Maximum bid price to place on your EC2 instances'
-        Type: 'String'
-        Default: '0.05'
+    VolumeSize:
+        Description: 'The size of the volume, in gibibytes (GiBs).'
+        Type: 'Number'
+        Default: '16'
 
     Subnets:
         Description: 'Which subnets the EC2 instances should be deployed to.'
         Type: List<AWS::EC2::Subnet::Id>
-
-    SecurityGroups:
-        Description: 'Security Group to place around the instances'
-        Type: List<AWS::EC2::SecurityGroup::Id>
 
 Mappings:
     # these AMIs change regularly.  Check http://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-optimized_AMI.html
@@ -81,6 +81,10 @@ Resources:
                   FromPort: 22
                   ToPort: 22
                   CidrIp: 0.0.0.0/0
+                - IpProtocol: tcp
+                  FromPort: 27017
+                  ToPort: 27019
+                  CidrIp: 0.0.0.0/0
             Tags:
                 - Key: 'Name'
                   Value:
@@ -101,209 +105,81 @@ Resources:
 
     AlphaInstance:
         Type: "AWS::EC2::Instance"
-            Properties:
-                AvailabilityZone: String
-                BlockDeviceMappings:
-                    - EC2 Block Device Mapping
-                EbsOptimized: Boolean
-                ImageId: String
-                InstanceInitiatedShutdownBehavior: 'stop'
-                InstanceType: String
-                KeyName: String
-                Monitoring: false
-                SecurityGroupIds:
-                    - String
-                SourceDestCheck: true
-                SubnetId: String
-                Tags:
-                    - Key: 'Name'
-                      Value:
-                          'Fn::Join': [ ':', [ 'MongoDB Alpha', !Ref 'AWS::StackName' ] ]
-                    - Key: 'Project'
-                      Value:
-                          Ref: 'Project'
-                    - Key: 'Purpose'
-                          Value: 'MongoDB Replica Set'
-                    - Key: 'Creator'
-                      Value:
-                          Ref: 'Creator'
-                    - Key: 'Environment'
-                      Value:
-                          Ref: 'Environment'
-                    - Key: 'Freetext'
-                      Value: 'Master Node'
-                Tenancy: 'default'
-                UserData: String
-                Volumes:
-                    - EC2 MountPoint
-
-    # Role needed by the EC2 instances so they can interact with ECS services
-    AmazonEC2ContainerServiceForEC2Role:
-        Type: 'AWS::IAM::Role'
-        Properties:
-            AssumeRolePolicyDocument:
-                Statement:
-                -
-                    Sid: ""
-                    Effect: "Allow"
-                    Principal:
-                        Service:
-                        - "ec2.amazonaws.com"
-                    Action:
-                    - "sts:AssumeRole"
-            Path: '/'
-            Policies:
-            -
-                PolicyName: "EC2CanContactECSRole"
-                PolicyDocument:
-                    Statement:
-                    -
-                        Effect: "Allow"
-                        Action:
-                            - "ec2:*"
-                            - "ecs:CreateCluster"
-                            - "ecs:DeregisterContainerInstance"
-                            - "ecs:DiscoverPollEndpoint"
-                            - "ecs:Poll"
-                            - "ecs:RegisterContainerInstance"
-                            - "ecs:StartTelemetrySession"
-                            - "ecs:Submit*"
-                            - "ecr:GetAuthorizationToken"
-                            - "ecr:BatchCheckLayerAvailability"
-                            - "ecr:GetDownloadUrlForLayer"
-                            - "ecr:BatchGetImage"
-                            - "logs:CreateLogStream"
-                            - "logs:PutLogEvents"
-                        Resource: "*"
-
-    # EC2 instances will run using this profile
-    ECSInstanceProfile:
-        Type: "AWS::IAM::InstanceProfile"
-        Properties:
-            Path: "/"
-            Roles:
-            -
-                Ref: "AmazonEC2ContainerServiceForEC2Role"
-
-    # Create the cluster
-    Cluster:
-        Type: 'AWS::ECS::Cluster'
-        Properties:
-            # cluster names must adhere to this expression: ^[a-zA-Z0-9\-_]{1,255}$
-            ClusterName:
-                Ref: 'AWS::StackName'
-
-    CloudWatchLogsGroup:
-        Type: AWS::Logs::LogGroup
-        Properties:
-            LogGroupName:
-                Ref: 'AWS::StackName'
-            RetentionInDays: 7
-
-    # auto scaling launch configuration for the ECS servers
-    EcsLaunchConfiguration:
-        Type: AWS::AutoScaling::LaunchConfiguration
         Properties:
             EbsOptimized: false
-            IamInstanceProfile:
-                Ref: 'ECSInstanceProfile'
             ImageId:
                 Fn::FindInMap:
                     - RegionToAmazonAMI
                     - Ref: 'AWS::Region'
                     - HVM64
-            InstanceMonitoring: false
+            InstanceInitiatedShutdownBehavior: 'stop'
             InstanceType:
-                Ref: 'InstanceType'
+                Ref: InstanceType
             KeyName:
-                Ref: 'SshKeyName'
-            SecurityGroups:
-                Ref: 'SecurityGroups'
-            SpotPrice:
-                Ref: SpotPrice
-            UserData:
-                Fn::Base64: !Sub |
-                    #!/bin/bash -xe
-                    echo ECS_CLUSTER=${Cluster} >> /etc/ecs/ecs.config
-                    curl -O https://bootstrap.pypa.io/get-pip.py
-                    python get-pip.py --user
-                    export PATH=~/.local/bin:$PATH
-                    pip --version
-                    pip install awscli --upgrade --user
-                    aws --version
-                    AWS_INSTANCE_ID=$( curl http://169.254.169.254/latest/meta-data/instance-id )
-                    echo "AWS_INSTANCE_ID=$AWS_INSTANCE_ID"
-                    ROOT_DISK_ID=$( aws ec2 describe-volumes --region ${AWS::Region} --filter "Name=attachment.instance-id, Values=$AWS_INSTANCE_ID" --query "Volumes[].VolumeId" --out text )
-                    echo "ROOT_DISK_ID=$ROOT_DISK_ID"
-                    aws ec2 create-tags  --region ${AWS::Region} --resources $ROOT_DISK_ID --tags Key=Project,Value='${Project}'
-
-    # auto scaling group for the ECS servers
-    EcsAutoScalingGroup:
-        Type: AWS::AutoScaling::AutoScalingGroup
-        Properties:
-            Cooldown: '120'
-            DesiredCapacity: '4'
-            HealthCheckType: 'EC2'
-            LaunchConfigurationName:
-                Ref: 'EcsLaunchConfiguration'
-            MaxSize: '6'
-            MinSize: '2'
+                Ref: SshKeyName
+            Monitoring: false
+            SecurityGroupIds:
+                - !Ref MongoDBSecurityGroup
+            SourceDestCheck: true
+            SubnetId:
+                Fn::Select: [ 0, !Ref Subnets ]
             Tags:
                 - Key: 'Name'
                   Value:
-                      'Fn::Join': [ ':', [ 'ECS', !Ref 'AWS::StackName' ] ]
-                  PropagateAtLaunch: true
+                      'Fn::Join': [ ':', [ 'MongoDB Alpha', !Ref 'AWS::StackName' ] ]
                 - Key: 'Project'
                   Value:
                       Ref: 'Project'
-                  PropagateAtLaunch: true
                 - Key: 'Purpose'
-                  Value: 'Docker Engine'
-                  PropagateAtLaunch: true
+                  Value: 'MongoDB Replica Set'
                 - Key: 'Creator'
                   Value:
                       Ref: 'Creator'
-                  PropagateAtLaunch: true
                 - Key: 'Environment'
                   Value:
                       Ref: 'Environment'
-                  PropagateAtLaunch: true
                 - Key: 'Freetext'
-                  Value: 'Runs ECS Agent and Docker'
-                  PropagateAtLaunch: true
-            VPCZoneIdentifier:
-                Ref: 'Subnets'
+                  Value: 'Master Node'
+            Tenancy: 'default'
 
-    # Turn off the instances after work hours
-    ScheduledActionDown:
-        Type: AWS::AutoScaling::ScheduledAction
+    AlphaDataVolume:
+        Type: "AWS::EC2::Volume"
         Properties:
-            AutoScalingGroupName:
-                Ref: EcsAutoScalingGroup
-            DesiredCapacity: 0
-            MaxSize: 0
-            MinSize: 0
-            # 7:00 PM EST converted to UTC
-            Recurrence: '00 00 * * *'
+            AutoEnableIO: false
+            AvailabilityZone:
+                "Fn::GetAtt": [ 'AlphaInstance', 'AvailabilityZone' ]
+            Encrypted: false
+            Size:
+                Ref: VolumeSize
+            Tags:
+                - Key: 'Name'
+                  Value:
+                      'Fn::Join': [ ':', [ 'MongoDB Alpha Data Volume', !Ref 'AWS::StackName' ] ]
+                - Key: 'Project'
+                  Value:
+                      Ref: 'Project'
+                - Key: 'Purpose'
+                  Value: 'MongoDB Data'
+                - Key: 'Creator'
+                  Value:
+                      Ref: 'Creator'
+                - Key: 'Environment'
+                  Value:
+                      Ref: 'Environment'
+                - Key: 'Freetext'
+                  Value: 'No notes'
+            VolumeType: gp2
 
-    # Turn on the instances during work hours
-    ScheduledActionUp:
-        Type: AWS::AutoScaling::ScheduledAction
+    AlphaDataVolumeAttachment:
+        Type: "AWS::EC2::VolumeAttachment"
         Properties:
-            AutoScalingGroupName:
-                Ref: EcsAutoScalingGroup
-            DesiredCapacity: 4
-            MaxSize: 6
-            MinSize: 2
-            # 7:00 AM EST converted to UTC
-            Recurrence: '00 12 * * *'
+            Device: /dev/xvdf
+            InstanceId:
+                Ref: AlphaInstance
+            VolumeId:
+                Ref: AlphaDataVolume
 
 Outputs:
-    Cluster:
-        Description: 'EC2 Container Service Cluster ID'
-        Value:
-            Ref: 'Cluster'
-    LogGroup:
-        Description: 'The CloudWatch Logs log group that ECS services should send their logs to'
-        Value:
-            Ref: 'CloudWatchLogsGroup'
+    AlphaPrivateAddress:
+        Description: 'The private IP address of the master instance.'
+        Value: !GetAtt AlphaInstance.PrivateIp
