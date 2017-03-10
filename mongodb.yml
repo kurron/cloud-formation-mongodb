@@ -51,6 +51,11 @@ Parameters:
         Type: 'Number'
         Default: '16'
 
+    VolumeType:
+        Description: 'The volume type. Acceptable values are gp2, io1, st1, sc1 and standard'
+        Type: 'String'
+        Default: 'gp2'
+
     Subnets:
         Description: 'Which subnets the EC2 instances should be deployed to.'
         Type: List<AWS::EC2::Subnet::Id>
@@ -111,7 +116,8 @@ Resources:
                       DeleteOnTermination: true
                       VolumeSize:
                           Ref: VolumeSize
-                      VolumeType: 'gp2'
+                      VolumeType:
+                          Ref: VolumeType
             EbsOptimized: false
             ImageId:
                 Fn::FindInMap:
@@ -148,7 +154,107 @@ Resources:
                   Value: 'Master Node'
             Tenancy: 'default'
 
+    BravoInstance:
+        Type: "AWS::EC2::Instance"
+        Properties:
+            BlockDeviceMappings:
+                - DeviceName: /dev/xvdf
+                  Ebs:
+                      DeleteOnTermination: true
+                      VolumeSize:
+                          Ref: VolumeSize
+                      VolumeType:
+                          Ref: VolumeType
+            EbsOptimized: false
+            ImageId:
+                Fn::FindInMap:
+                    - RegionToAmazonAMI
+                    - Ref: 'AWS::Region'
+                    - HVM64
+            InstanceInitiatedShutdownBehavior: 'stop'
+            InstanceType:
+                Ref: InstanceType
+            KeyName:
+                Ref: SshKeyName
+            Monitoring: false
+            SecurityGroupIds:
+                - !Ref MongoDBSecurityGroup
+            SourceDestCheck: true
+            SubnetId:
+                Fn::Select: [ 1, !Ref Subnets ]
+            Tags:
+                - Key: 'Name'
+                  Value:
+                      'Fn::Join': [ ':', [ 'MongoDB Bravo', !Ref 'AWS::StackName' ] ]
+                - Key: 'Project'
+                  Value:
+                      Ref: 'Project'
+                - Key: 'Purpose'
+                  Value: 'MongoDB Replica Set'
+                - Key: 'Creator'
+                  Value:
+                      Ref: 'Creator'
+                - Key: 'Environment'
+                  Value:
+                      Ref: 'Environment'
+                - Key: 'Freetext'
+                  Value: 'Master Node'
+            Tenancy: 'default'
+
+    CharlieInstance:
+        Type: "AWS::EC2::Instance"
+        Properties:
+            BlockDeviceMappings:
+                - DeviceName: /dev/xvdf
+                  Ebs:
+                      DeleteOnTermination: true
+                      VolumeSize:
+                          Ref: VolumeSize
+                      VolumeType:
+                          Ref: VolumeType
+            EbsOptimized: false
+            ImageId:
+                Fn::FindInMap:
+                    - RegionToAmazonAMI
+                    - Ref: 'AWS::Region'
+                    - HVM64
+            InstanceInitiatedShutdownBehavior: 'stop'
+            InstanceType:
+                Ref: InstanceType
+            KeyName:
+                Ref: SshKeyName
+            Monitoring: false
+            SecurityGroupIds:
+                - !Ref MongoDBSecurityGroup
+            SourceDestCheck: true
+            SubnetId:
+                Fn::Select: [ 2, !Ref Subnets ]
+            Tags:
+                - Key: 'Name'
+                  Value:
+                      'Fn::Join': [ ':', [ 'MongoDB Charlie', !Ref 'AWS::StackName' ] ]
+                - Key: 'Project'
+                  Value:
+                      Ref: 'Project'
+                - Key: 'Purpose'
+                  Value: 'MongoDB Replica Set'
+                - Key: 'Creator'
+                  Value:
+                      Ref: 'Creator'
+                - Key: 'Environment'
+                  Value:
+                      Ref: 'Environment'
+                - Key: 'Freetext'
+                  Value: 'Master Node'
+            Tenancy: 'default'
+
 Outputs:
     AlphaPrivateAddress:
         Description: 'The private IP address of the master instance.'
         Value: !GetAtt AlphaInstance.PrivateIp
+    BravoPrivateAddress:
+        Description: 'The private IP address of the secondary instance.'
+        Value: !GetAtt BravoInstance.PrivateIp
+    CharliePrivateAddress:
+        Description: 'The private IP address of the tertiary instance.'
+        Value: !GetAtt CharlieInstance.PrivateIp
