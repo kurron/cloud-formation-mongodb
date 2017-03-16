@@ -70,7 +70,7 @@ Mappings:
         us-west-1:
             HVM64: not-set
         us-west-2:
-            HVM64: ami-a6bb34c6
+            HVM64: ami-d6bd34b6
 
 Resources:
     #SSH and MongoDB ports only
